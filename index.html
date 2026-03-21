@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Launchpad Mini MK3 – Pixel Art Editor</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --panel: #16213e;
+    --border: #0f3460;
+    --text: #e0e0e0;
+    --accent: #e94560;
+    --hover: #533483;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  h1 {
+    font-size: 1.4rem;
+    margin-bottom: 16px;
+    letter-spacing: 1px;
+    color: #fff;
+  }
+  .app {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .left-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* Toolbar */
+  .toolbar {
+    display: flex;
+    gap: 4px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px;
+  }
+  .toolbar button {
+    width: 44px; height: 44px;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .15s;
+  }
+  .toolbar button:hover { background: var(--hover); }
+  .toolbar button.active { border-color: var(--accent); background: var(--hover); }
+  .toolbar button .tooltip {
+    display: none;
+    position: absolute;
+    bottom: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #000;
+    color: #fff;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    z-index: 10;
+  }
+  .toolbar button { position: relative; }
+  .toolbar button:hover .tooltip { display: block; }
+
+  /* Grid */
+  .grid-container {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(8, 56px);
+    grid-template-rows: repeat(8, 56px);
+    gap: 3px;
+  }
+  .cell {
+    width: 56px; height: 56px;
+    border-radius: 6px;
+    cursor: crosshair;
+    border: 2px solid transparent;
+    transition: border-color .1s;
+    position: relative;
+  }
+  .cell:hover { border-color: rgba(255,255,255,0.4); }
+  .cell.selected {
+    border-color: var(--accent) !important;
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  .cell .idx-label {
+    position: absolute;
+    bottom: 2px; right: 4px;
+    font-size: 9px;
+    color: rgba(255,255,255,0.6);
+    text-shadow: 0 0 2px #000;
+    pointer-events: none;
+  }
+
+  /* Selection overlay for drag-move */
+  .cell.in-drag-selection {
+    opacity: 0.5;
+  }
+
+  /* Palette */
+  .right-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .palette-section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .palette-section h3 {
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+    color: #aaa;
+  }
+  .palette {
+    display: grid;
+    grid-template-columns: repeat(8, 30px);
+    gap: 2px;
+  }
+  .palette .swatch {
+    width: 30px; height: 30px;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all .1s;
+    position: relative;
+  }
+  .palette .swatch:hover { transform: scale(1.2); z-index: 2; }
+  .palette .swatch.active { border-color: #fff; transform: scale(1.15); z-index: 2; }
+  .swatch .swatch-tip {
+    display: none;
+    position: absolute;
+    bottom: 110%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #000;
+    color: #fff;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.65rem;
+    white-space: nowrap;
+    z-index: 20;
+  }
+  .swatch:hover .swatch-tip { display: block; }
+
+  /* Current color preview */
+  .current-color {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .current-color .preview {
+    width: 40px; height: 40px;
+    border-radius: 6px;
+    border: 2px solid #555;
+  }
+  .current-color .info {
+    font-size: 0.85rem;
+    line-height: 1.4;
+  }
+
+  /* Actions */
+  .actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .actions button {
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--panel);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background .15s;
+  }
+  .actions button:hover { background: var(--hover); }
+
+  /* Checkerboard for color 0 (off/transparent) */
+  .cell-off {
+    background-image:
+      linear-gradient(45deg, #2a2a2a 25%, transparent 25%),
+      linear-gradient(-45deg, #2a2a2a 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #2a2a2a 75%),
+      linear-gradient(-45deg, transparent 75%, #2a2a2a 75%);
+    background-size: 14px 14px;
+    background-position: 0 0, 0 7px, 7px -7px, -7px 0px;
+    background-color: #1e1e1e;
+  }
+</style>
+</head>
+<body>
+
+<h1>Launchpad Mini MK3 &mdash; Pixel Art Editor</h1>
+
+<div class="app">
+  <div class="left-panel">
+    <div class="toolbar" id="toolbar"></div>
+    <div class="grid-container">
+      <div class="grid" id="grid"></div>
+    </div>
+    <div class="actions">
+      <button onclick="saveFile()">&#128190; Zapisz plik</button>
+      <button onclick="loadFile()">&#128194; Wczytaj plik</button>
+      <input type="file" id="fileInput" accept=".txt,.lp" style="display:none" onchange="handleFileLoad(event)">
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <div class="current-color">
+      <div class="preview" id="currentPreview"></div>
+      <div class="info" id="currentInfo">Kolor: 0<br>#000000</div>
+    </div>
+    <div class="palette-section">
+      <h3>Paleta kolorów (0–127)</h3>
+      <div class="palette" id="palette"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Launchpad Mini MK3 palette – 128 colors (index → hex)
+const PALETTE = [
+  "#000000","#505050","#a0a0a0","#f0f0f0","#ff9185","#ff230a","#e61f09","#cc1c08",
+  "#ffc285","#ff850a","#e67709","#cc6a08","#fff385","#ffe70a","#e6cf09","#ccb808",
+  "#daff85","#b6ff0a","#a3e609","#91cc08","#a9ff85","#54ff0a","#4be609","#43cc08",
+  "#85ff91","#0aff23","#09e61f","#08cc1c","#85ffc2","#0aff85","#09e677","#08cc6a",
+  "#85fff3","#0affe7","#09e6cf","#08ccb8","#85daff","#0ab6ff","#09a3e6","#0891cc",
+  "#85a9ff","#0a54ff","#094be6","#0843cc","#9185ff","#230aff","#1f09e6","#1c08cc",
+  "#c285ff","#850aff","#7709e6","#6a08cc","#f385ff","#e70aff","#cf09e6","#b808cc",
+  "#ff85da","#ff0ab6","#e609a3","#cc0891","#f04115","#bf6100","#b18c00","#859708",
+  "#50a027","#009d8e","#0079c0","#0000ff","#2d50a4","#6247b0","#7b7b7b","#3c3c3c",
+  "#ff0000","#bfbb64","#a6c000","#78c823","#34c500","#00c0af","#00a2f1","#527de7",
+  "#8868e7","#a447af","#b93b69","#975731","#f86c00","#befd00","#82ff5d","#00ff00",
+  "#00ffa5","#52ffe8","#00e9ff","#89c4ff","#91a5ff","#b989ff","#da67e7","#ff2cd6",
+  "#ffa601","#fff200","#e3f600","#dcc500","#bf9e5f","#88b57b","#86c2ba","#9ab3c5",
+  "#84a5c3","#c78b7a","#f43c7f","#ff93a5","#ffa36f","#ffef9a","#d2e594","#bad16f",
+  "#a9a9a9","#d3fee0","#ccf1f9","#b9c0e4","#cdbae5","#d0d0d0","#dfe6e5","#ffffff",
+  "#f2210a","#bf1a08","#acf20a","#88bf08","#f2db0a","#bfad08","#f7a409","#e06b41"
+];
+
+// State
+const grid = new Array(64).fill(0);
+let currentColor = 5; // red
+let currentTool = 'brush';
+let selection = new Set();
+let isMouseDown = false;
+let selStartCell = null;
+let dragState = null; // { startCell, snapshot, offsetCells }
+
+// Tools definition
+const tools = [
+  { id: 'brush',    icon: '&#9999;&#65039;',  label: 'Pędzel' },
+  { id: 'select',   icon: '&#11036;',  label: 'Zaznaczenie' },
+  { id: 'bucket',   icon: '&#128166;', label: 'Wiaderko' },
+  { id: 'eraser',   icon: '&#9114;',   label: 'Gumka' },
+  { id: 'clear',    icon: '&#128465;', label: 'Wyczyść zaznaczenie' },
+];
+
+// --- Init ---
+function init() {
+  buildToolbar();
+  buildPalette();
+  buildGrid();
+  updateCurrentColor();
+}
+
+function buildToolbar() {
+  const tb = document.getElementById('toolbar');
+  tools.forEach(t => {
+    const btn = document.createElement('button');
+    btn.innerHTML = t.icon + `<span class="tooltip">${t.label}</span>`;
+    btn.dataset.tool = t.id;
+    if (t.id === currentTool) btn.classList.add('active');
+    btn.addEventListener('click', () => {
+      if (t.id === 'clear') {
+        clearSelection();
+        return;
+      }
+      currentTool = t.id;
+      document.querySelectorAll('.toolbar button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (t.id !== 'select') {
+        // don't clear selection when switching away – user may want to fill it
+      }
+    });
+    tb.appendChild(btn);
+  });
+}
+
+function buildPalette() {
+  const pal = document.getElementById('palette');
+  PALETTE.forEach((hex, i) => {
+    const sw = document.createElement('div');
+    sw.className = 'swatch' + (i === 0 ? ' cell-off' : '');
+    if (i !== 0) sw.style.backgroundColor = hex;
+    sw.innerHTML = `<span class="swatch-tip">${i}: ${hex}</span>`;
+    if (i === currentColor) sw.classList.add('active');
+    sw.addEventListener('click', () => {
+      currentColor = i;
+      document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
+      updateCurrentColor();
+    });
+    pal.appendChild(sw);
+  });
+}
+
+function buildGrid() {
+  const g = document.getElementById('grid');
+  for (let i = 0; i < 64; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell cell-off';
+    cell.dataset.idx = i;
+    cell.innerHTML = `<span class="idx-label">0</span>`;
+
+    cell.addEventListener('mousedown', e => onCellMouseDown(i, e));
+    cell.addEventListener('mouseenter', e => onCellMouseEnter(i, e));
+    cell.addEventListener('mouseup', e => onCellMouseUp(i, e));
+    cell.addEventListener('contextmenu', e => e.preventDefault());
+
+    g.appendChild(cell);
+  }
+
+  document.addEventListener('mouseup', () => {
+    if (dragState) finishDrag();
+    isMouseDown = false;
+    selStartCell = null;
+  });
+}
+
+function updateCurrentColor() {
+  const prev = document.getElementById('currentPreview');
+  const info = document.getElementById('currentInfo');
+  if (currentColor === 0) {
+    prev.style.backgroundColor = '';
+    prev.className = 'preview cell-off';
+  } else {
+    prev.className = 'preview';
+    prev.style.backgroundColor = PALETTE[currentColor];
+  }
+  info.innerHTML = `Kolor: ${currentColor}<br>${PALETTE[currentColor]}`;
+}
+
+// --- Cell rendering ---
+function renderCell(i) {
+  const cell = document.getElementById('grid').children[i];
+  const v = grid[i];
+  if (v === 0) {
+    cell.style.backgroundColor = '';
+    cell.classList.add('cell-off');
+  } else {
+    cell.classList.remove('cell-off');
+    cell.style.backgroundColor = PALETTE[v];
+  }
+  cell.querySelector('.idx-label').textContent = v;
+  // selection visual
+  if (selection.has(i)) {
+    cell.classList.add('selected');
+  } else {
+    cell.classList.remove('selected');
+  }
+}
+
+function renderAll() {
+  for (let i = 0; i < 64; i++) renderCell(i);
+}
+
+// --- Tool actions ---
+function onCellMouseDown(i, e) {
+  e.preventDefault();
+  isMouseDown = true;
+
+  if (currentTool === 'brush') {
+    grid[i] = currentColor;
+    renderCell(i);
+  } else if (currentTool === 'eraser') {
+    grid[i] = 0;
+    renderCell(i);
+  } else if (currentTool === 'bucket') {
+    bucketFill(i);
+  } else if (currentTool === 'select') {
+    // If clicking inside existing selection, start drag-move
+    if (selection.has(i)) {
+      startDrag(i);
+    } else {
+      // Start new rectangular selection
+      selection.clear();
+      selStartCell = i;
+      selection.add(i);
+      renderAll();
+    }
+  }
+}
+
+function onCellMouseEnter(i, e) {
+  if (!isMouseDown) return;
+
+  if (currentTool === 'brush') {
+    grid[i] = currentColor;
+    renderCell(i);
+  } else if (currentTool === 'eraser') {
+    grid[i] = 0;
+    renderCell(i);
+  } else if (currentTool === 'select' && selStartCell !== null && !dragState) {
+    // Rectangular selection
+    const r1 = Math.floor(selStartCell / 8), c1 = selStartCell % 8;
+    const r2 = Math.floor(i / 8), c2 = i % 8;
+    const rMin = Math.min(r1, r2), rMax = Math.max(r1, r2);
+    const cMin = Math.min(c1, c2), cMax = Math.max(c1, c2);
+    selection.clear();
+    for (let r = rMin; r <= rMax; r++)
+      for (let c = cMin; c <= cMax; c++)
+        selection.add(r * 8 + c);
+    renderAll();
+  } else if (dragState) {
+    updateDrag(i);
+  }
+}
+
+function onCellMouseUp(i, e) {
+  if (dragState) finishDrag();
+}
+
+// --- Bucket fill ---
+function bucketFill(startIdx) {
+  if (selection.size > 0) {
+    // Fill selection with current color
+    selection.forEach(i => { grid[i] = currentColor; });
+    renderAll();
+  } else {
+    // Flood fill same-color region
+    const targetColor = grid[startIdx];
+    if (targetColor === currentColor) return;
+    const visited = new Set();
+    const stack = [startIdx];
+    while (stack.length) {
+      const idx = stack.pop();
+      if (visited.has(idx)) continue;
+      if (grid[idx] !== targetColor) continue;
+      visited.add(idx);
+      grid[idx] = currentColor;
+      const r = Math.floor(idx / 8), c = idx % 8;
+      if (r > 0) stack.push((r - 1) * 8 + c);
+      if (r < 7) stack.push((r + 1) * 8 + c);
+      if (c > 0) stack.push(r * 8 + (c - 1));
+      if (c < 7) stack.push(r * 8 + (c + 1));
+    }
+    renderAll();
+  }
+}
+
+// --- Selection clear ---
+function clearSelection() {
+  if (selection.size > 0) {
+    selection.forEach(i => { grid[i] = 0; });
+    selection.clear();
+    renderAll();
+  }
+}
+
+// --- Drag-move selection ---
+function startDrag(anchorCell) {
+  const snapshot = {};
+  selection.forEach(i => { snapshot[i] = grid[i]; });
+  dragState = {
+    anchorCell,
+    snapshot,
+    origPositions: new Set(selection),
+  };
+  // Clear original positions visually
+  selection.forEach(i => { grid[i] = 0; });
+  renderAll();
+  // Draw floating at current position
+  drawDragPreview(0, 0);
+}
+
+function updateDrag(currentCell) {
+  if (!dragState) return;
+  const dr = Math.floor(currentCell / 8) - Math.floor(dragState.anchorCell / 8);
+  const dc = (currentCell % 8) - (dragState.anchorCell % 8);
+  // Restore grid to clean state (no floating pixels)
+  dragState.origPositions.forEach(i => { grid[i] = 0; });
+  // Remove previous preview
+  for (let i = 0; i < 64; i++) {
+    if (!dragState.origPositions.has(i)) continue;
+  }
+  drawDragPreview(dr, dc);
+}
+
+function drawDragPreview(dr, dc) {
+  // Clear all non-original cells that might have preview
+  // Rebuild grid without selection items first
+  const tempGrid = [...grid];
+  // Place floating items
+  const newPositions = new Set();
+  for (const [origIdx, color] of Object.entries(dragState.snapshot)) {
+    const r = Math.floor(parseInt(origIdx) / 8) + dr;
+    const c = (parseInt(origIdx) % 8) + dc;
+    if (r >= 0 && r < 8 && c >= 0 && c < 8) {
+      const newIdx = r * 8 + c;
+      tempGrid[newIdx] = color;
+      newPositions.add(newIdx);
+    }
+  }
+  // Apply to grid
+  for (let i = 0; i < 64; i++) grid[i] = tempGrid[i];
+  selection.clear();
+  newPositions.forEach(i => selection.add(i));
+  dragState._lastDr = dr;
+  dragState._lastDc = dc;
+  renderAll();
+}
+
+function finishDrag() {
+  // Grid is already updated with the preview in final position
+  dragState = null;
+  renderAll();
+}
+
+// --- File I/O ---
+function saveFile() {
+  let content = '# Launchpad Mini MK3 pixel art\ndelay 100\n';
+  for (let r = 0; r < 8; r++) {
+    const row = [];
+    for (let c = 0; c < 8; c++) {
+      row.push(grid[r * 8 + c]);
+    }
+    content += row.join(' ') + '\n';
+  }
+  const blob = new Blob([content], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'launchpad-art.txt';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function loadFile() {
+  document.getElementById('fileInput').click();
+}
+
+function handleFileLoad(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    const text = ev.target.result;
+    const lines = text.split('\n')
+      .map(l => l.trim())
+      .filter(l => l && !l.startsWith('#') && !l.startsWith('delay'));
+    let idx = 0;
+    for (const line of lines) {
+      const nums = line.split(/\s+/).map(Number);
+      for (const n of nums) {
+        if (idx < 64) {
+          grid[idx] = Math.max(0, Math.min(127, n));
+          idx++;
+        }
+      }
+    }
+    selection.clear();
+    renderAll();
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// --- Start ---
+init();
+</script>
+</body>
+</html>
