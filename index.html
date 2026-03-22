@@ -50,6 +50,12 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 8px;
+    flex-wrap: wrap;
+  }
+  .toolbar .separator {
+    width: 1px;
+    background: var(--border);
+    margin: 4px 4px;
   }
   .toolbar button {
     width: 44px; height: 44px;
@@ -63,6 +69,7 @@
     align-items: center;
     justify-content: center;
     transition: all .15s;
+    position: relative;
   }
   .toolbar button:hover { background: var(--hover); }
   .toolbar button.active { border-color: var(--accent); background: var(--hover); }
@@ -80,8 +87,11 @@
     white-space: nowrap;
     z-index: 10;
   }
-  .toolbar button { position: relative; }
   .toolbar button:hover .tooltip { display: block; }
+  .toolbar button svg {
+    width: 24px;
+    height: 24px;
+  }
 
   /* Grid */
   .grid-container {
@@ -116,11 +126,6 @@
     color: rgba(255,255,255,0.6);
     text-shadow: 0 0 2px #000;
     pointer-events: none;
-  }
-
-  /* Selection overlay for drag-move */
-  .cell.in-drag-selection {
-    opacity: 0.5;
   }
 
   /* Palette */
@@ -220,6 +225,54 @@
     background-position: 0 0, 0 7px, 7px -7px, -7px 0px;
     background-color: #1e1e1e;
   }
+
+  /* Confirm dialog */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.visible { display: flex; }
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    min-width: 320px;
+    text-align: center;
+  }
+  .modal p {
+    margin-bottom: 20px;
+    font-size: 1rem;
+  }
+  .modal .modal-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+  }
+  .modal button {
+    padding: 8px 24px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background .15s;
+  }
+  .modal .btn-confirm {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .modal .btn-confirm:hover { background: #c73a52; }
+  .modal .btn-cancel {
+    background: var(--bg);
+    color: var(--text);
+  }
+  .modal .btn-cancel:hover { background: var(--hover); }
 </style>
 </head>
 <body>
@@ -251,8 +304,19 @@
   </div>
 </div>
 
+<!-- Confirm dialog for new document -->
+<div class="modal-overlay" id="newDocModal">
+  <div class="modal">
+    <p>Czy na pewno chcesz rozpocząć nowy obrazek?<br>Obecna praca zostanie utracona.</p>
+    <div class="modal-buttons">
+      <button class="btn-cancel" onclick="closeNewDocModal()">Anuluj</button>
+      <button class="btn-confirm" onclick="confirmNewDoc()">Tak, nowy obrazek</button>
+    </div>
+  </div>
+</div>
+
 <script>
-// Launchpad Mini MK3 palette – 128 colors (index → hex)
+// Launchpad Mini MK3 palette – 128 colors (index -> hex)
 const PALETTE = [
   "#000000","#505050","#a0a0a0","#f0f0f0","#ff9185","#ff230a","#e61f09","#cc1c08",
   "#ffc285","#ff850a","#e67709","#cc6a08","#fff385","#ffe70a","#e6cf09","#ccb808",
@@ -272,22 +336,100 @@ const PALETTE = [
   "#f2210a","#bf1a08","#acf20a","#88bf08","#f2db0a","#bfad08","#f7a409","#e06b41"
 ];
 
+// --- SVG Icons ---
+const SVG_ICONS = {
+  brush: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18.37 2.63a2.12 2.12 0 013 3L14 13l-4 1 1-4z"/>
+    <path d="M9 15c-3 1-5 3-5 5 2 0 4-1 5-3"/>
+  </svg>`,
+
+  selectRect: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+    <rect x="3" y="3" width="18" height="18" rx="1" stroke-dasharray="3 2"/>
+  </svg>`,
+
+  selectEllipse: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+    <ellipse cx="12" cy="12" rx="9" ry="7" stroke-dasharray="3 2"/>
+  </svg>`,
+
+  selectVLine: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+    <rect x="3" y="3" width="18" height="18" rx="1" stroke-dasharray="3 2" opacity="0.3"/>
+    <rect x="9" y="3" width="6" height="18" fill="currentColor" opacity="0.35" stroke="currentColor" stroke-dasharray="3 2"/>
+  </svg>`,
+
+  selectHLine: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+    <rect x="3" y="3" width="18" height="18" rx="1" stroke-dasharray="3 2" opacity="0.3"/>
+    <rect x="3" y="9" width="18" height="6" fill="currentColor" opacity="0.35" stroke="currentColor" stroke-dasharray="3 2"/>
+  </svg>`,
+
+  bucket: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 16V4h8l4 4v8a2 2 0 01-2 2H7a2 2 0 01-2-2z" fill="currentColor" opacity="0.15"/>
+    <path d="M19 11c1 1 2 2 2 3.5S20 17 19 17s-2-1.5-2-2.5 1-2.5 2-3.5"/>
+    <path d="M2 21l5-5"/>
+    <path d="M7 16l6.5-6.5"/>
+    <path d="M12.5 4L17 8.5"/>
+  </svg>`,
+
+  eraser: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 20H7L3 16l10-10 8 8-4 4"/>
+    <path d="M7 16l6-6"/>
+  </svg>`,
+
+  clearSel: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 6h18M8 6V4h8v2M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/>
+    <line x1="10" y1="11" x2="10" y2="17"/>
+    <line x1="14" y1="11" x2="14" y2="17"/>
+  </svg>`,
+
+  newDoc: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <line x1="12" y1="12" x2="12" y2="18"/>
+    <line x1="9" y1="15" x2="15" y2="15"/>
+  </svg>`,
+
+  deselect: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="1" stroke-dasharray="3 2"/>
+    <line x1="8" y1="8" x2="16" y2="16" stroke-width="2"/>
+    <line x1="16" y1="8" x2="8" y2="16" stroke-width="2"/>
+  </svg>`,
+};
+
 // State
 const grid = new Array(64).fill(0);
-let currentColor = 5; // red
+let currentColor = 5;
 let currentTool = 'brush';
 let selection = new Set();
 let isMouseDown = false;
 let selStartCell = null;
-let dragState = null; // { startCell, snapshot, offsetCells }
+let dragState = null;
+
+// Selection sub-modes: 'rect', 'ellipse', 'vline', 'hline'
+const selectModes = ['rect', 'ellipse', 'vline', 'hline'];
+const selectModeIcons = {
+  rect: SVG_ICONS.selectRect,
+  ellipse: SVG_ICONS.selectEllipse,
+  vline: SVG_ICONS.selectVLine,
+  hline: SVG_ICONS.selectHLine,
+};
+const selectModeLabels = {
+  rect: 'Zaznaczenie: prostokat',
+  ellipse: 'Zaznaczenie: kolo',
+  vline: 'Zaznaczenie: linia pionowa',
+  hline: 'Zaznaczenie: linia pozioma',
+};
+let selectModeIndex = 0;
+let selectBtn = null;
 
 // Tools definition
 const tools = [
-  { id: 'brush',    icon: '&#9999;&#65039;',  label: 'Pędzel' },
-  { id: 'select',   icon: '&#11036;',  label: 'Zaznaczenie' },
-  { id: 'bucket',   icon: '&#128166;', label: 'Wiaderko' },
-  { id: 'eraser',   icon: '&#9114;',   label: 'Gumka' },
-  { id: 'clear',    icon: '&#128465;', label: 'Wyczyść zaznaczenie' },
+  { id: 'brush',    icon: SVG_ICONS.brush,    label: 'Pedzel' },
+  { id: 'select',   icon: SVG_ICONS.selectRect, label: 'Zaznaczenie: prostokat' },
+  { id: 'bucket',   icon: SVG_ICONS.bucket,   label: 'Wiaderko' },
+  { id: 'eraser',   icon: SVG_ICONS.eraser,   label: 'Gumka' },
+  { id: 'clear',    icon: SVG_ICONS.clearSel, label: 'Wyczysc zaznaczenie' },
+  { id: '_sep1' },
+  { id: 'newdoc',   icon: SVG_ICONS.newDoc,   label: 'Nowy obrazek' },
+  { id: 'deselect', icon: SVG_ICONS.deselect, label: 'Odznacz' },
 ];
 
 // --- Init ---
@@ -301,24 +443,59 @@ function init() {
 function buildToolbar() {
   const tb = document.getElementById('toolbar');
   tools.forEach(t => {
+    if (t.id.startsWith('_sep')) {
+      const sep = document.createElement('div');
+      sep.className = 'separator';
+      tb.appendChild(sep);
+      return;
+    }
     const btn = document.createElement('button');
     btn.innerHTML = t.icon + `<span class="tooltip">${t.label}</span>`;
     btn.dataset.tool = t.id;
+
+    if (t.id === 'select') selectBtn = btn;
     if (t.id === currentTool) btn.classList.add('active');
+
     btn.addEventListener('click', () => {
+      // --- Actions (no toggle) ---
       if (t.id === 'clear') {
         clearSelection();
         return;
       }
+      if (t.id === 'newdoc') {
+        openNewDocModal();
+        return;
+      }
+      if (t.id === 'deselect') {
+        if (selection.size > 0) {
+          selection.clear();
+          renderAll();
+        }
+        return;
+      }
+
+      // --- Select tool: rotate sub-mode on re-click ---
+      if (t.id === 'select' && currentTool === 'select') {
+        selectModeIndex = (selectModeIndex + 1) % selectModes.length;
+        updateSelectBtnVisual();
+        return;
+      }
+
+      // --- Switch tool ---
       currentTool = t.id;
       document.querySelectorAll('.toolbar button').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      if (t.id !== 'select') {
-        // don't clear selection when switching away – user may want to fill it
-      }
     });
     tb.appendChild(btn);
   });
+}
+
+function updateSelectBtnVisual() {
+  if (!selectBtn) return;
+  const mode = selectModes[selectModeIndex];
+  const tooltip = selectBtn.querySelector('.tooltip');
+  // Replace SVG only (keep tooltip)
+  selectBtn.innerHTML = selectModeIcons[mode] + `<span class="tooltip">${selectModeLabels[mode]}</span>`;
 }
 
 function buildPalette() {
@@ -387,7 +564,6 @@ function renderCell(i) {
     cell.style.backgroundColor = PALETTE[v];
   }
   cell.querySelector('.idx-label').textContent = v;
-  // selection visual
   if (selection.has(i)) {
     cell.classList.add('selected');
   } else {
@@ -397,6 +573,56 @@ function renderCell(i) {
 
 function renderAll() {
   for (let i = 0; i < 64; i++) renderCell(i);
+}
+
+// --- Selection shape helpers ---
+function computeSelectionShape(startIdx, endIdx) {
+  const mode = selectModes[selectModeIndex];
+  const r1 = Math.floor(startIdx / 8), c1 = startIdx % 8;
+  const r2 = Math.floor(endIdx / 8), c2 = endIdx % 8;
+  const result = new Set();
+
+  if (mode === 'rect') {
+    const rMin = Math.min(r1, r2), rMax = Math.max(r1, r2);
+    const cMin = Math.min(c1, c2), cMax = Math.max(c1, c2);
+    for (let r = rMin; r <= rMax; r++)
+      for (let c = cMin; c <= cMax; c++)
+        result.add(r * 8 + c);
+  } else if (mode === 'ellipse') {
+    const rMin = Math.min(r1, r2), rMax = Math.max(r1, r2);
+    const cMin = Math.min(c1, c2), cMax = Math.max(c1, c2);
+    const cx = (cMin + cMax) / 2;
+    const cy = (rMin + rMax) / 2;
+    const rx = (cMax - cMin) / 2;
+    const ry = (rMax - rMin) / 2;
+    if (rx === 0 && ry === 0) {
+      result.add(r1 * 8 + c1);
+    } else {
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const dx = (c - cx) / (rx || 0.5);
+          const dy = (r - cy) / (ry || 0.5);
+          if (dx * dx + dy * dy <= 1.05) {
+            result.add(r * 8 + c);
+          }
+        }
+      }
+    }
+  } else if (mode === 'vline') {
+    // Select full column(s) between c1 and c2
+    const cMin = Math.min(c1, c2), cMax = Math.max(c1, c2);
+    for (let r = 0; r < 8; r++)
+      for (let c = cMin; c <= cMax; c++)
+        result.add(r * 8 + c);
+  } else if (mode === 'hline') {
+    // Select full row(s) between r1 and r2
+    const rMin = Math.min(r1, r2), rMax = Math.max(r1, r2);
+    for (let r = rMin; r <= rMax; r++)
+      for (let c = 0; c < 8; c++)
+        result.add(r * 8 + c);
+  }
+
+  return result;
 }
 
 // --- Tool actions ---
@@ -413,11 +639,9 @@ function onCellMouseDown(i, e) {
   } else if (currentTool === 'bucket') {
     bucketFill(i);
   } else if (currentTool === 'select') {
-    // If clicking inside existing selection, start drag-move
     if (selection.has(i)) {
       startDrag(i);
     } else {
-      // Start new rectangular selection
       selection.clear();
       selStartCell = i;
       selection.add(i);
@@ -436,15 +660,7 @@ function onCellMouseEnter(i, e) {
     grid[i] = 0;
     renderCell(i);
   } else if (currentTool === 'select' && selStartCell !== null && !dragState) {
-    // Rectangular selection
-    const r1 = Math.floor(selStartCell / 8), c1 = selStartCell % 8;
-    const r2 = Math.floor(i / 8), c2 = i % 8;
-    const rMin = Math.min(r1, r2), rMax = Math.max(r1, r2);
-    const cMin = Math.min(c1, c2), cMax = Math.max(c1, c2);
-    selection.clear();
-    for (let r = rMin; r <= rMax; r++)
-      for (let c = cMin; c <= cMax; c++)
-        selection.add(r * 8 + c);
+    selection = computeSelectionShape(selStartCell, i);
     renderAll();
   } else if (dragState) {
     updateDrag(i);
@@ -458,11 +674,9 @@ function onCellMouseUp(i, e) {
 // --- Bucket fill ---
 function bucketFill(startIdx) {
   if (selection.size > 0) {
-    // Fill selection with current color
     selection.forEach(i => { grid[i] = currentColor; });
     renderAll();
   } else {
-    // Flood fill same-color region
     const targetColor = grid[startIdx];
     if (targetColor === currentColor) return;
     const visited = new Set();
@@ -501,10 +715,8 @@ function startDrag(anchorCell) {
     snapshot,
     origPositions: new Set(selection),
   };
-  // Clear original positions visually
   selection.forEach(i => { grid[i] = 0; });
   renderAll();
-  // Draw floating at current position
   drawDragPreview(0, 0);
 }
 
@@ -512,20 +724,12 @@ function updateDrag(currentCell) {
   if (!dragState) return;
   const dr = Math.floor(currentCell / 8) - Math.floor(dragState.anchorCell / 8);
   const dc = (currentCell % 8) - (dragState.anchorCell % 8);
-  // Restore grid to clean state (no floating pixels)
   dragState.origPositions.forEach(i => { grid[i] = 0; });
-  // Remove previous preview
-  for (let i = 0; i < 64; i++) {
-    if (!dragState.origPositions.has(i)) continue;
-  }
   drawDragPreview(dr, dc);
 }
 
 function drawDragPreview(dr, dc) {
-  // Clear all non-original cells that might have preview
-  // Rebuild grid without selection items first
   const tempGrid = [...grid];
-  // Place floating items
   const newPositions = new Set();
   for (const [origIdx, color] of Object.entries(dragState.snapshot)) {
     const r = Math.floor(parseInt(origIdx) / 8) + dr;
@@ -536,7 +740,6 @@ function drawDragPreview(dr, dc) {
       newPositions.add(newIdx);
     }
   }
-  // Apply to grid
   for (let i = 0; i < 64; i++) grid[i] = tempGrid[i];
   selection.clear();
   newPositions.forEach(i => selection.add(i));
@@ -546,9 +749,22 @@ function drawDragPreview(dr, dc) {
 }
 
 function finishDrag() {
-  // Grid is already updated with the preview in final position
   dragState = null;
   renderAll();
+}
+
+// --- New Document ---
+function openNewDocModal() {
+  document.getElementById('newDocModal').classList.add('visible');
+}
+function closeNewDocModal() {
+  document.getElementById('newDocModal').classList.remove('visible');
+}
+function confirmNewDoc() {
+  for (let i = 0; i < 64; i++) grid[i] = 0;
+  selection.clear();
+  renderAll();
+  closeNewDocModal();
 }
 
 // --- File I/O ---
