@@ -312,10 +312,18 @@ def convert(input_path, output_path):
 
 def main():
     if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
-        print("Uzycie: python3 png2launchpad.py <input.png> [output.txt]")
+        print("png2launchpad – Convert PNG images to Launchpad Mini MK3 pixel art format")
         print()
-        print("Konwertuje obrazek PNG na format Launchpad Mini MK3 (siatka 8x8).")
-        print("Obrazek musi byc kwadratowy, maksymalnie 400x400 pikseli.")
+        print("Usage: python3 png2launchpad.py <input.png> [output.txt]")
+        print()
+        print("Converts a PNG image to an 8x8 grid of Launchpad color indices (0-127).")
+        print("The image must be square, max 400x400 pixels. Each pixel is mapped to the")
+        print("nearest color in the Launchpad palette using perceptual color matching.")
+        print()
+        print("If output path is omitted, the input filename with .txt extension is used.")
+        print()
+        print("The output file can be opened in the web editor (index.html) or played")
+        print("on hardware with: ./launchpad_grid.py output.txt")
         sys.exit(0)
 
     input_path = sys.argv[1]

@@ -461,21 +461,43 @@ def run_serve(args: argparse.Namespace) -> int:
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Render Launchpad Mini MK3 grid animations",
-        epilog="Example: ./launchpad_grid.py --fps 12 examples/launchpad/demo.anim",
+        description=(
+            "Launchpad Mini MK3 – CLI tool for rendering pixel art, animations "
+            "and scenes on the hardware. Can also serve as a live preview bridge "
+            "for the web-based pixel art editor (index.html)."
+        ),
+        epilog=(
+            "Examples:\n"
+            "  %(prog)s demo.txt                   Play an animation file\n"
+            "  %(prog)s -l --fps 12 demo.txt        Loop at 12 FPS\n"
+            "  %(prog)s --scene scene.yaml --loop    Play a YAML scene\n"
+            "  %(prog)s --serve                      Start live preview server\n"
+            "  %(prog)s --clear                      Clear the Launchpad display\n"
+            "  %(prog)s --list-ports                 Show available MIDI ports"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("path", nargs="?")
-    parser.add_argument("--scene")
-    parser.add_argument("-p", "--port")
-    parser.add_argument("-l", "--loop", action="store_true")
-    parser.add_argument("-n", "--repeats", type=int, default=1)
-    parser.add_argument("-f", "--frame", type=int)
-    parser.add_argument("--fps", type=positive_fps)
-    parser.add_argument("--clear", action="store_true")
-    parser.add_argument("--list-ports", action="store_true")
+    parser.add_argument("path", nargs="?", metavar="FILE",
+                        help="animation file to play (.txt)")
+    parser.add_argument("--scene", metavar="FILE",
+                        help="load a YAML scene file")
+    parser.add_argument("-p", "--port", metavar="PORT",
+                        help="MIDI port (e.g. hw:1,0,0); auto-detected if omitted")
+    parser.add_argument("-l", "--loop", action="store_true",
+                        help="loop playback indefinitely")
+    parser.add_argument("-n", "--repeats", type=int, default=1, metavar="N",
+                        help="number of playback repeats (default: 1)")
+    parser.add_argument("-f", "--frame", type=int, metavar="N",
+                        help="display only frame N (1-based)")
+    parser.add_argument("--fps", type=positive_fps,
+                        help="override playback speed")
+    parser.add_argument("--clear", action="store_true",
+                        help="clear the Launchpad display")
+    parser.add_argument("--list-ports", action="store_true",
+                        help="list available MIDI output ports")
     parser.add_argument("--serve", action="store_true",
-                        help="Start HTTP server for live preview from the web editor")
-    parser.add_argument("--http-port", type=int, default=9321,
+                        help="start HTTP server for live preview from the web editor")
+    parser.add_argument("--http-port", type=int, default=9321, metavar="PORT",
                         help="HTTP port for --serve mode (default: 9321)")
     return parser.parse_args(argv)
 
