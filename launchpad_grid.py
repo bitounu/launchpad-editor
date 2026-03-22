@@ -435,7 +435,7 @@ class LiveHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def log_message(self, fmt: str, *args: object) -> None:
-        pass  # silence per-request logs
+        print(fmt % args, flush=True)
 
 
 def run_serve(args: argparse.Namespace) -> int:
