@@ -402,6 +402,9 @@ def auto_detect_port_name() -> str:
         raise ValueError(f"Multiple Launchpad ports detected: {candidates}")
     if not outputs:
         raise ValueError("No MIDI output ports found.")
+    if len(outputs) == 1:
+        print(f"No Launchpad port found; using the only available MIDI output: {outputs[0]}")
+        return outputs[0]
     available = ", ".join(outputs)
     raise ValueError(f"No Launchpad port detected automatically. Available MIDI output ports: {available}")
 
