@@ -392,6 +392,13 @@ const SVG_ICONS = {
     <line x1="8" y1="8" x2="16" y2="16" stroke-width="2"/>
     <line x1="16" y1="8" x2="8" y2="16" stroke-width="2"/>
   </svg>`,
+
+  picker: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 3l-1.5 1.5M12 12l6.5-6.5"/>
+    <path d="M18.5 5.5l-1-1"/>
+    <path d="M14 10l-8.5 8.5a1.5 1.5 0 000 2.12v0a1.5 1.5 0 002.12 0L16 12"/>
+    <path d="M3.5 20.5l1.5-1.5"/>
+  </svg>`,
 };
 
 // State
@@ -425,6 +432,7 @@ const tools = [
   { id: 'brush',    icon: SVG_ICONS.brush,    label: 'Pedzel' },
   { id: 'select',   icon: SVG_ICONS.selectRect, label: 'Zaznaczenie: prostokat' },
   { id: 'bucket',   icon: SVG_ICONS.bucket,   label: 'Wiaderko' },
+  { id: 'picker',   icon: SVG_ICONS.picker,   label: 'Próbnik koloru' },
   { id: 'eraser',   icon: SVG_ICONS.eraser,   label: 'Gumka' },
   { id: 'clear',    icon: SVG_ICONS.clearSel, label: 'Wyczysc zaznaczenie' },
   { id: '_sep1' },
@@ -690,6 +698,8 @@ function onCellMouseDown(i, e) {
   } else if (currentTool === 'eraser') {
     grid[i] = 0;
     renderCell(i);
+  } else if (currentTool === 'picker') {
+    pickColor(grid[i]);
   } else if (currentTool === 'bucket') {
     bucketFill(i);
   } else if (currentTool === 'select') {
@@ -726,6 +736,19 @@ function onCellMouseUp(i, e) {
 }
 
 // --- Bucket fill ---
+// --- Color picker ---
+function pickColor(colorIdx) {
+  currentColor = colorIdx;
+  document.querySelectorAll('.swatch').forEach(s => {
+    if (parseInt(s.dataset.colorIdx) === colorIdx) {
+      s.classList.add('active');
+    } else {
+      s.classList.remove('active');
+    }
+  });
+  updateCurrentColor();
+}
+
 function bucketFill(startIdx) {
   if (selection.size > 0) {
     selection.forEach(i => { grid[i] = currentColor; });
