@@ -908,6 +908,8 @@ function handleFileLoad(e) {
 let liveEnabled = false;
 let livePort = 9321;
 let livePending = false;
+let liveDirty = false;
+let liveTimer = null;
 
 function toggleLive() {
   liveEnabled = !liveEnabled;
@@ -915,12 +917,23 @@ function toggleLive() {
   btn.classList.toggle('active', liveEnabled);
   btn.classList.remove('error');
   if (liveEnabled) {
-    sendGridToLaunchpad();
+    scheduleLiveSend();
   }
 }
 
-function sendGridToLaunchpad() {
-  if (!liveEnabled || livePending) return;
+function scheduleLiveSend() {
+  if (!liveEnabled) return;
+  liveDirty = true;
+  if (!liveTimer) {
+    liveTimer = setTimeout(flushLive, 30);
+  }
+}
+
+function flushLive() {
+  liveTimer = null;
+  if (!liveEnabled || !liveDirty) return;
+  liveDirty = false;
+  if (livePending) { liveDirty = true; return; }
   livePending = true;
   fetch(`http://localhost:${livePort}/grid`, {
     method: 'POST',
@@ -931,6 +944,7 @@ function sendGridToLaunchpad() {
     livePending = false;
     if (!resp.ok) throw new Error(resp.statusText);
     document.getElementById('liveBtn').classList.remove('error');
+    if (liveDirty) scheduleLiveSend();
   })
   .catch(() => {
     livePending = false;
@@ -938,11 +952,16 @@ function sendGridToLaunchpad() {
   });
 }
 
-// Hook into renderAll to push changes to Launchpad
+// Hook into renderCell and renderAll to push changes to Launchpad
+const _origRenderCell = renderCell;
+renderCell = function(i) {
+  _origRenderCell(i);
+  scheduleLiveSend();
+};
 const _origRenderAll = renderAll;
 renderAll = function() {
   _origRenderAll();
-  sendGridToLaunchpad();
+  scheduleLiveSend();
 };
 
 // --- Start ---
