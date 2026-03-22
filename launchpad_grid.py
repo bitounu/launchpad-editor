@@ -518,16 +518,17 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         ),
         epilog=(
             "Examples:\n"
-            "  %(prog)s demo.txt                   Play an animation file\n"
-            "  %(prog)s -l --fps 12 demo.txt        Loop at 12 FPS\n"
-            "  %(prog)s --scene scene.yaml --loop    Play a YAML scene\n"
-            "  %(prog)s --serve                      Start live preview server\n"
-            "  %(prog)s --clear                      Clear the Launchpad display\n"
-            "  %(prog)s --list-ports                 Show available MIDI ports\n"
-            "  %(prog)s --text 'Hello!'              Scroll text once\n"
-            "  %(prog)s --text 'Hi' -l --color 5     Scroll red text in a loop\n"
-            "  %(prog)s --text 'RGB' --color 0,127,0 Scroll with custom RGB color\n"
-            "  %(prog)s --text-stop                  Stop active text scroll"
+            "  %(prog)s demo.txt                        Play an animation file\n"
+            "  %(prog)s -l --fps 12 demo.txt            Loop at 12 FPS\n"
+            "  %(prog)s --scene scene.yaml --loop       Play a YAML scene\n"
+            "  %(prog)s --serve                         Start live preview server\n"
+            "  %(prog)s --clear                         Clear the Launchpad display\n"
+            "  %(prog)s --list-ports                    Show available MIDI ports\n"
+            "  %(prog)s --text 'Hello!'                 Scroll text once\n"
+            "  %(prog)s --text 'Hi' -l --color 5        Scroll red text in a loop\n"
+            "  %(prog)s --text 'RGB' --color 0,127,0    Scroll with custom RGB color\n"
+            "  %(prog)s --text 'Bogurodzica' --speed 15 Scroll with custom speed\n"
+            "  %(prog)s --text-stop                     Stop active text scroll"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
