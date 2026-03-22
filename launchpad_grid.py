@@ -384,6 +384,56 @@ def send_programmer_mode(port: str) -> None:
     send_hex(port, "F0 00 20 29 02 0D 00 7F F7")
 
 
+def parse_color_spec(value: str) -> list[int]:
+    """Parse a color spec: palette index (0-127) or r,g,b (each 0-127)."""
+    if "," in value:
+        parts = value.split(",")
+        if len(parts) != 3:
+            raise argparse.ArgumentTypeError("RGB color must be r,g,b (e.g. 127,0,0)")
+        rgb = []
+        for component in parts:
+            n = int(component)
+            if not 0 <= n <= 127:
+                raise argparse.ArgumentTypeError(f"RGB component must be 0-127, got {n}")
+            rgb.append(n)
+        return [0x01] + rgb
+    idx = int(value)
+    if not 0 <= idx <= 127:
+        raise argparse.ArgumentTypeError(f"Palette index must be 0-127, got {idx}")
+    return [0x00, idx]
+
+
+def build_text_scroll_sysex(text: str, *, loop: bool = False,
+                            speed: int = 10, color_bytes: list[int] | None = None) -> str:
+    """Build SysEx message for text scrolling on Launchpad Mini MK3.
+
+    speed: pads/second (1-63 left-to-right, negative for right-to-left)
+    """
+    header = [0xF0, 0x00, 0x20, 0x29, 0x02, 0x0D, 0x07]
+    payload = [1 if loop else 0]
+
+    # Speed: positive = right-to-left scroll, negative = left-to-right
+    # Values 0x40+ are interpreted as negative by the device
+    if speed < 0:
+        speed_byte = (abs(speed) + 0x80) & 0x7F  # map to 0x40+
+    else:
+        speed_byte = speed & 0x3F
+    payload.append(speed_byte)
+
+    if color_bytes is None:
+        color_bytes = [0x00, 0x03]  # palette white
+    payload.extend(color_bytes)
+
+    payload.extend(ord(c) for c in text)
+    parts = header + payload + [0xF7]
+    return " ".join(f"{b:02X}" for b in parts)
+
+
+def build_text_stop_sysex() -> str:
+    """Build SysEx to stop any active text scroll."""
+    return "F0 00 20 29 02 0D 07 F7"
+
+
 def build_grid_sysex(color_indices: list[int]) -> str:
     """Build SysEx from a flat list of 64 color indices (row-major, 0-127)."""
     parts = ["F0", "00", "20", "29", "02", "0D", "03"]
@@ -473,7 +523,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "  %(prog)s --scene scene.yaml --loop    Play a YAML scene\n"
             "  %(prog)s --serve                      Start live preview server\n"
             "  %(prog)s --clear                      Clear the Launchpad display\n"
-            "  %(prog)s --list-ports                 Show available MIDI ports"
+            "  %(prog)s --list-ports                 Show available MIDI ports\n"
+            "  %(prog)s --text 'Hello!'              Scroll text once\n"
+            "  %(prog)s --text 'Hi' -l --color 5     Scroll red text in a loop\n"
+            "  %(prog)s --text 'RGB' --color 0,127,0 Scroll with custom RGB color\n"
+            "  %(prog)s --text-stop                  Stop active text scroll"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -499,6 +553,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                         help="start HTTP server for live preview from the web editor")
     parser.add_argument("--http-port", type=int, default=9321, metavar="PORT",
                         help="HTTP port for --serve mode (default: 9321)")
+    parser.add_argument("--text", metavar="STRING",
+                        help="scroll text across the Launchpad surface")
+    parser.add_argument("--text-stop", action="store_true",
+                        help="stop any active text scroll")
+    parser.add_argument("--speed", type=int, default=10, metavar="N",
+                        help="scroll speed in pads/second (default: 10; negative = reverse)")
+    parser.add_argument("--color", metavar="COLOR",
+                        help="text color: palette index 0-127 or r,g,b (e.g. 127,0,0)")
     return parser.parse_args(argv)
 
 
@@ -570,6 +632,19 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.serve:
             return run_serve(args)
+        if args.text_stop:
+            port = resolve_port(args)
+            send_hex(port, build_text_stop_sysex())
+            return 0
+        if args.text is not None:
+            port = resolve_port(args)
+            color_bytes = parse_color_spec(args.color) if args.color else None
+            sysex = build_text_scroll_sysex(
+                args.text, loop=args.loop, speed=args.speed,
+                color_bytes=color_bytes,
+            )
+            send_hex(port, sysex)
+            return 0
         return run_animation(args)
     except (ValueError, FileNotFoundError, subprocess.CalledProcessError) as exc:
         print(f"error: {exc}", file=sys.stderr)

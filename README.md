@@ -56,6 +56,22 @@ In the editor, click **"Live Preview"** – the button turns green and every edi
 ./launchpad_grid.py --scene scene.yaml --loop
 ```
 
+### Scrolling Text
+
+```bash
+# Scroll text once in white
+./launchpad_grid.py --text "Hello World"
+
+# Loop red text at speed 15
+./launchpad_grid.py --text "Alert!" -l --speed 15 --color 5
+
+# Custom RGB color
+./launchpad_grid.py --text "RGB" --color 0,127,0
+
+# Stop scrolling
+./launchpad_grid.py --text-stop
+```
+
 ### Converting PNG to Launchpad Format
 
 ```bash
@@ -112,6 +128,10 @@ Options:
   --scene FILE          Load a YAML scene file
   --serve               Start HTTP server for live preview
   --http-port PORT      HTTP port for --serve (default: 9321)
+  --text STRING         Scroll text across the Launchpad surface
+  --text-stop           Stop any active text scroll
+  --speed N             Scroll speed in pads/second (default: 10; negative = reverse)
+  --color COLOR         Text color: palette index 0-127 or r,g,b (e.g. 127,0,0)
 ```
 
 ```

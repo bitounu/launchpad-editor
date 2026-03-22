@@ -56,6 +56,22 @@ W edytorze kliknij **"Live Preview"** – przycisk zmieni kolor na zielony, a ka
 ./launchpad_grid.py --scene scena.yaml --loop
 ```
 
+### Przewijany tekst
+
+```bash
+# Przewiń tekst raz (biały)
+./launchpad_grid.py --text "Hello World"
+
+# Zapętl czerwony tekst z prędkością 15
+./launchpad_grid.py --text "Uwaga!" -l --speed 15 --color 5
+
+# Własny kolor RGB
+./launchpad_grid.py --text "RGB" --color 0,127,0
+
+# Zatrzymaj przewijanie
+./launchpad_grid.py --text-stop
+```
+
 ### Konwersja PNG do formatu Launchpada
 
 ```bash
@@ -112,6 +128,10 @@ Opcje:
   --scene PLIK          Wczytaj plik sceny YAML
   --serve               Uruchom serwer HTTP do podglądu na żywo
   --http-port PORT      Port HTTP dla --serve (domyślnie: 9321)
+  --text TEKST          Przewiń tekst na wyświetlaczu Launchpada
+  --text-stop           Zatrzymaj aktywne przewijanie tekstu
+  --speed N             Prędkość przewijania w padach/s (domyślnie: 10; ujemna = odwrotnie)
+  --color KOLOR         Kolor tekstu: indeks palety 0-127 lub r,g,b (np. 127,0,0)
 ```
 
 ```
