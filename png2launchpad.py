@@ -5,8 +5,9 @@ Usage: python3 png2launchpad.py input.png [output.txt]
 
 The script:
 - Validates the image is square and max 400x400
-- Resizes to 8x8 using area-average interpolation
-- Maps each pixel to the nearest color in the 127-color Launchpad palette
+- Downscales to 8x8 using weighted majority-vote quantization
+- Each source pixel is mapped to its nearest palette colour first,
+  then for each output cell the most represented palette index wins
 """
 
 import sys
@@ -217,24 +218,24 @@ def _read_png(filepath):
     return width, height, rows
 
 
-def resize_to_8x8(width, height, rows):
-    """Resize image to 8x8 using area-average interpolation.
+def quantize_to_8x8(width, height, rows):
+    """Quantize image to 8x8 grid of palette indices using weighted majority vote.
 
-    Each output pixel is the average of all source pixels that fall within its
-    corresponding region of the source image.
+    Each source pixel is first mapped to its nearest palette colour.  For each
+    output cell the palette index whose source pixels cover the largest total
+    area wins.  This avoids creating intermediate RGB values that have no good
+    match in the limited Launchpad palette.
     """
     out = []
     for oy in range(8):
         row = []
-        # Source region for this output row
         sy_start = oy * height / 8.0
         sy_end = (oy + 1) * height / 8.0
         for ox in range(8):
             sx_start = ox * width / 8.0
             sx_end = (ox + 1) * width / 8.0
 
-            r_acc, g_acc, b_acc = 0.0, 0.0, 0.0
-            weight_total = 0.0
+            votes: dict[int, float] = {}
 
             y0 = int(math.floor(sy_start))
             y1 = int(math.ceil(sy_end))
@@ -242,14 +243,12 @@ def resize_to_8x8(width, height, rows):
             x1 = int(math.ceil(sx_end))
 
             for py in range(y0, min(y1, height)):
-                # Vertical overlap weight
                 wy_lo = max(py, sy_start)
                 wy_hi = min(py + 1, sy_end)
                 wy = wy_hi - wy_lo
                 if wy <= 0:
                     continue
                 for px in range(x0, min(x1, width)):
-                    # Horizontal overlap weight
                     wx_lo = max(px, sx_start)
                     wx_hi = min(px + 1, sx_end)
                     wx = wx_hi - wx_lo
@@ -257,21 +256,18 @@ def resize_to_8x8(width, height, rows):
                         continue
                     w = wx * wy
                     pr, pg, pb, pa = rows[py][px]
-                    # Blend transparent pixels towards black (index 0)
                     alpha = pa / 255.0
-                    r_acc += pr * alpha * w
-                    g_acc += pg * alpha * w
-                    b_acc += pb * alpha * w
-                    weight_total += w
+                    w *= alpha
+                    if w <= 0:
+                        continue
+                    idx = nearest_palette_index(pr, pg, pb)
+                    votes[idx] = votes.get(idx, 0.0) + w
 
-            if weight_total > 0:
-                r_avg = int(round(r_acc / weight_total))
-                g_avg = int(round(g_acc / weight_total))
-                b_avg = int(round(b_acc / weight_total))
+            if votes:
+                best_idx = max(votes, key=votes.get)
             else:
-                r_avg, g_avg, b_avg = 0, 0, 0
-
-            row.append((r_avg, g_avg, b_avg))
+                best_idx = 0
+            row.append(best_idx)
         out.append(row)
     return out
 
@@ -288,14 +284,8 @@ def convert(input_path, output_path):
         print(f"Blad: Maksymalny rozmiar obrazka to 400x400 (aktualnie {width}x{height}).")
         sys.exit(1)
 
-    # Resize to 8x8 with area-average interpolation
-    small = resize_to_8x8(width, height, rows)
-
-    # Map each pixel to nearest palette color
-    grid_rows = []
-    for row in small:
-        indices = [nearest_palette_index(r, g, b) for r, g, b in row]
-        grid_rows.append(indices)
+    # Quantize to 8x8 with majority vote
+    grid_rows = quantize_to_8x8(width, height, rows)
 
     # Write output in Launchpad editor format
     with open(output_path, "w") as f:
