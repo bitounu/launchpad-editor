@@ -498,13 +498,67 @@ function updateSelectBtnVisual() {
   selectBtn.innerHTML = selectModeIcons[mode] + `<span class="tooltip">${selectModeLabels[mode]}</span>`;
 }
 
+// --- Color sorting helpers ---
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h, s, l = (max + min) / 2;
+  if (max === min) {
+    h = s = 0;
+  } else {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+    }
+  }
+  return [h, s, l];
+}
+
+function getSortedPaletteIndices() {
+  const entries = PALETTE.map((hex, i) => {
+    const [r, g, b] = hexToRgb(hex);
+    const [h, s, l] = rgbToHsl(r, g, b);
+    return { i, h, s, l };
+  });
+
+  // Separate achromatic (very low saturation) from chromatic
+  const achromatic = entries.filter(e => e.s < 0.08);
+  const chromatic = entries.filter(e => e.s >= 0.08);
+
+  // Sort achromatic by lightness
+  achromatic.sort((a, b) => a.l - b.l);
+
+  // Sort chromatic: primary by hue (12 segments), secondary by lightness
+  chromatic.sort((a, b) => {
+    const hueA = Math.floor(a.h * 12);
+    const hueB = Math.floor(b.h * 12);
+    if (hueA !== hueB) return hueA - hueB;
+    return a.l - b.l;
+  });
+
+  // Achromatic first (blacks/grays/whites), then chromatic by hue
+  return [...achromatic.map(e => e.i), ...chromatic.map(e => e.i)];
+}
+
 function buildPalette() {
   const pal = document.getElementById('palette');
-  PALETTE.forEach((hex, i) => {
+  const sortedIndices = getSortedPaletteIndices();
+
+  sortedIndices.forEach(i => {
+    const hex = PALETTE[i];
     const sw = document.createElement('div');
     sw.className = 'swatch' + (i === 0 ? ' cell-off' : '');
     if (i !== 0) sw.style.backgroundColor = hex;
     sw.innerHTML = `<span class="swatch-tip">${i}: ${hex}</span>`;
+    sw.dataset.colorIdx = i;
     if (i === currentColor) sw.classList.add('active');
     sw.addEventListener('click', () => {
       currentColor = i;
