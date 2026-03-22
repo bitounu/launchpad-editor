@@ -8,7 +8,8 @@ Webowy edytor pixel art dla Novation Launchpad Mini MK3 z podglądem na żywo na
 
 - **Edytor webowy** (`index.html`) – rysuj pixel art na siatce 8×8 z pełną 128-kolorową paletą Launchpada
 - **Podgląd na żywo** – obserwuj swoją grafikę na fizycznym Launchpadzie w czasie rzeczywistym
-- **Odtwarzacz CLI** (`launchpad_grid.py`) – odtwarzaj animacje i sceny na sprzęcie
+- **Odtwarzacz CLI** (`launchpad_midi.py`) – odtwarzaj animacje i sceny na sprzęcie (czysty Python, bez `amidi`)
+- **Starszy odtwarzacz CLI** (`launchpad_grid.py`) – te same funkcje z użyciem `amidi` (tylko Linux/ALSA)
 - **Konwerter PNG** (`png2launchpad.py`) – konwertuj dowolny obraz PNG do formatu Launchpada
 
 ## Szybki start
@@ -17,19 +18,25 @@ Webowy edytor pixel art dla Novation Launchpad Mini MK3 z podglądem na żywo na
 2. Wybierz kolor z palety i rysuj na siatce
 3. Zapisz pracę przyciskiem "Zapisz plik" (pobiera plik `.txt`)
 
+### Konfiguracja środowiska
+
+Zainstaluj [uv](https://docs.astral.sh/uv/), a następnie skonfiguruj projekt:
+
+```bash
+# Utwórz środowisko wirtualne i zainstaluj wszystkie zależności
+uv sync
+```
+
 ### Podgląd na żywo na sprzęcie
 
 Podłącz Launchpad Mini MK3 przez USB, następnie:
 
 ```bash
-# Zainstaluj zależność
-pip install pyyaml
-
 # Uruchom serwer podglądu na żywo (automatycznie wykrywa port MIDI)
-./launchpad_grid.py --serve
+uv run python launchpad_midi.py --serve
 
 # Lub podaj port ręcznie
-./launchpad_grid.py --serve -p hw:1,0,0
+uv run python launchpad_midi.py --serve -p "Launchpad Mini MK3:Launchpad Mini MK3 MIDI 1 20:0"
 ```
 
 W edytorze kliknij **"Live Preview"** – przycisk zmieni kolor na zielony, a każda zmiana zostanie natychmiast wysłana na Launchpada.
@@ -38,44 +45,44 @@ W edytorze kliknij **"Live Preview"** – przycisk zmieni kolor na zielony, a ka
 
 ```bash
 # Odtwórz plik animacji
-./launchpad_grid.py sciezka/do/animacji.txt
+uv run python launchpad_midi.py sciezka/do/animacji.txt
 
 # Zapętl z własnym FPS
-./launchpad_grid.py -l --fps 12 animacja.txt
+uv run python launchpad_midi.py -l --fps 12 animacja.txt
 
 # Pokaż pojedynczą klatkę
-./launchpad_grid.py -f 3 animacja.txt
+uv run python launchpad_midi.py -f 3 animacja.txt
 
 # Wyczyść wyświetlacz
-./launchpad_grid.py --clear
+uv run python launchpad_midi.py --clear
 ```
 
 ### Odtwarzanie scen (YAML)
 
 ```bash
-./launchpad_grid.py --scene scena.yaml --loop
+uv run python launchpad_midi.py --scene scena.yaml --loop
 ```
 
 ### Przewijany tekst
 
 ```bash
 # Przewiń tekst raz (biały)
-./launchpad_grid.py --text "Hello World"
+uv run python launchpad_midi.py --text "Hello World"
 
 # Zapętl czerwony tekst z prędkością 15
-./launchpad_grid.py --text "Uwaga!" -l --speed 15 --color 5
+uv run python launchpad_midi.py --text "Uwaga!" -l --speed 15 --color 5
 
 # Własny kolor RGB
-./launchpad_grid.py --text "RGB" --color 0,127,0
+uv run python launchpad_midi.py --text "RGB" --color 0,127,0
 
 # Zatrzymaj przewijanie
-./launchpad_grid.py --text-stop
+uv run python launchpad_midi.py --text-stop
 ```
 
 ### Konwersja PNG do formatu Launchpada
 
 ```bash
-python3 png2launchpad.py wejscie.png wyjscie.txt
+uv run python png2launchpad.py wejscie.png wyjscie.txt
 ```
 
 Obraz musi być kwadratowy (max 400×400 px). Zostanie przeskalowany do 8×8, a każdy piksel zostanie dopasowany do najbliższego koloru z palety Launchpada.
@@ -115,10 +122,10 @@ Wiele klatek można rozdzielić za pomocą `---`, a różne opóźnienia ustawi�
 ## Opis narzędzi CLI
 
 ```
-./launchpad_grid.py [opcje] [animacja.txt]
+uv run python launchpad_midi.py [opcje] [animacja.txt]
 
 Opcje:
-  -p, --port PORT       Port MIDI (np. hw:1,0,0). Wykrywany automatycznie.
+  -p, --port PORT       Nazwa portu MIDI. Wykrywany automatycznie.
   -l, --loop            Zapętl odtwarzanie
   -n, --repeats N       Liczba powtórzeń (domyślnie: 1)
   -f, --frame N         Wyświetl tylko klatkę N
@@ -135,7 +142,7 @@ Opcje:
 ```
 
 ```
-python3 png2launchpad.py [opcje] <wejscie.png> [wyjscie.txt]
+uv run python png2launchpad.py [opcje] <wejscie.png> [wyjscie.txt]
 
 Opcje:
   -h, --help            Wyświetl pomoc
@@ -143,7 +150,12 @@ Opcje:
 
 ## Wymagania
 
+- [uv](https://docs.astral.sh/uv/) (zalecane) lub `pip`
 - Python 3.9+
-- `pyyaml` (`pip install pyyaml`)
-- `amidi` (część `alsa-utils` na Linuxie)
 - Novation Launchpad Mini MK3
+
+Wszystkie zależności Pythona (`pyyaml`, `mido`, `python-rtmidi`) są zadeklarowane w `pyproject.toml` i instalowane automatycznie przez `uv sync`.
+
+### Starszy CLI (`launchpad_grid.py`)
+
+Oryginalny `launchpad_grid.py` korzysta z polecenia `amidi` (część `alsa-utils` na Linuxie) zamiast bibliotek MIDI Pythona. Pozostaje dostępny dla środowisk, w których instalacja `python-rtmidi` nie jest możliwa.
