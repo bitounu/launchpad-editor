@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import json
 from pathlib import Path
 import random
 import re
 import subprocess
 import sys
+import threading
 import time
 
 import yaml
@@ -381,6 +384,81 @@ def send_programmer_mode(port: str) -> None:
     send_hex(port, "F0 00 20 29 02 0D 00 7F F7")
 
 
+def build_grid_sysex(color_indices: list[int]) -> str:
+    """Build SysEx from a flat list of 64 color indices (row-major, 0-127)."""
+    parts = ["F0", "00", "20", "29", "02", "0D", "03"]
+    for row in range(8):
+        for col in range(8):
+            idx = row * 8 + col
+            color = max(0, min(127, color_indices[idx]))
+            parts.extend(["00", f"{GRID_INDICES[row][col]:02X}", f"{color:02X}"])
+    for fi in FUNCTION_INDICES:
+        parts.extend(["00", f"{fi:02X}", "00"])
+    parts.append("F7")
+    return " ".join(parts)
+
+
+class LiveHandler(BaseHTTPRequestHandler):
+    """HTTP handler for live preview – accepts POST /grid with JSON body."""
+
+    midi_port: str = ""
+
+    def do_POST(self) -> None:
+        if self.path != "/grid":
+            self.send_error(404)
+            return
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length)
+        try:
+            data = json.loads(body)
+            colors = data["grid"]
+            if not isinstance(colors, list) or len(colors) != 64:
+                raise ValueError("grid must be a list of 64 integers")
+            sysex = build_grid_sysex(colors)
+            send_hex(self.midi_port, sysex)
+        except Exception as exc:
+            self.send_response(500)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(str(exc).encode())
+            return
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(b"ok")
+
+    def do_OPTIONS(self) -> None:
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+
+    def log_message(self, fmt: str, *args: object) -> None:
+        pass  # silence per-request logs
+
+
+def run_serve(args: argparse.Namespace) -> int:
+    port = resolve_port(args)
+    send_programmer_mode(port)
+    send_hex(port, build_clear_sysex())
+
+    LiveHandler.midi_port = port
+    http_port = args.http_port
+    server = HTTPServer(("0.0.0.0", http_port), LiveHandler)
+    print(f"Live preview server running on http://localhost:{http_port}")
+    print(f"MIDI port: {port}")
+    print("Open the editor in a browser and click 'Live Preview' to connect.")
+    print("Press Ctrl+C to stop.")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nStopping...")
+        send_hex(port, build_clear_sysex())
+        server.server_close()
+    return 0
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Render Launchpad Mini MK3 grid animations",
@@ -395,6 +473,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--fps", type=positive_fps)
     parser.add_argument("--clear", action="store_true")
     parser.add_argument("--list-ports", action="store_true")
+    parser.add_argument("--serve", action="store_true",
+                        help="Start HTTP server for live preview from the web editor")
+    parser.add_argument("--http-port", type=int, default=9321,
+                        help="HTTP port for --serve mode (default: 9321)")
     return parser.parse_args(argv)
 
 
@@ -464,6 +546,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.list_ports:
             print_port_commands("./launchpad_grid.py", list_midi_ports())
             return 0
+        if args.serve:
+            return run_serve(args)
         return run_animation(args)
     except (ValueError, FileNotFoundError, subprocess.CalledProcessError) as exc:
         print(f"error: {exc}", file=sys.stderr)

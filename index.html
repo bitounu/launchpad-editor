@@ -273,6 +273,17 @@
     color: var(--text);
   }
   .modal .btn-cancel:hover { background: var(--hover); }
+  #liveBtn.active {
+    background: #2ecc40;
+    color: #000;
+    border-color: #2ecc40;
+    font-weight: bold;
+  }
+  #liveBtn.error {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
 </style>
 </head>
 <body>
@@ -288,6 +299,7 @@
     <div class="actions">
       <button onclick="saveFile()">&#128190; Zapisz plik</button>
       <button onclick="loadFile()">&#128194; Wczytaj plik</button>
+      <button id="liveBtn" onclick="toggleLive()">&#127927; Live Preview</button>
       <input type="file" id="fileInput" accept=".txt,.lp" style="display:none" onchange="handleFileLoad(event)">
     </div>
   </div>
@@ -891,6 +903,47 @@ function handleFileLoad(e) {
   reader.readAsText(file);
   e.target.value = '';
 }
+
+// --- Live Preview (Launchpad hardware) ---
+let liveEnabled = false;
+let livePort = 9321;
+let livePending = false;
+
+function toggleLive() {
+  liveEnabled = !liveEnabled;
+  const btn = document.getElementById('liveBtn');
+  btn.classList.toggle('active', liveEnabled);
+  btn.classList.remove('error');
+  if (liveEnabled) {
+    sendGridToLaunchpad();
+  }
+}
+
+function sendGridToLaunchpad() {
+  if (!liveEnabled || livePending) return;
+  livePending = true;
+  fetch(`http://localhost:${livePort}/grid`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ grid: Array.from(grid) }),
+  })
+  .then(resp => {
+    livePending = false;
+    if (!resp.ok) throw new Error(resp.statusText);
+    document.getElementById('liveBtn').classList.remove('error');
+  })
+  .catch(() => {
+    livePending = false;
+    document.getElementById('liveBtn').classList.add('error');
+  });
+}
+
+// Hook into renderAll to push changes to Launchpad
+const _origRenderAll = renderAll;
+renderAll = function() {
+  _origRenderAll();
+  sendGridToLaunchpad();
+};
 
 // --- Start ---
 init();
