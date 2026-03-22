@@ -279,11 +279,11 @@ def convert(input_path, output_path):
     width, height, rows = _read_png(input_path)
 
     if width != height:
-        print(f"Blad: Obrazek musi byc kwadratowy (aktualnie {width}x{height}).")
+        print(f"Error: Image must be square (currently {width}x{height}).")
         sys.exit(1)
 
     if width > 400 or height > 400:
-        print(f"Blad: Maksymalny rozmiar obrazka to 400x400 (aktualnie {width}x{height}).")
+        print(f"Error: Maximum image size is 400x400 (currently {width}x{height}).")
         sys.exit(1)
 
     # Quantize to 8x8 with majority vote
@@ -296,8 +296,8 @@ def convert(input_path, output_path):
         for row_indices in grid_rows:
             f.write(" ".join(str(i) for i in row_indices) + "\n")
 
-    print(f"Zapisano: {output_path}")
-    print("Podglad siatki 8x8 (indeksy kolorow):")
+    print(f"Saved: {output_path}")
+    print("8x8 grid preview (color indices):")
     for row_indices in grid_rows:
         print("  " + " ".join(f"{i:>3}" for i in row_indices))
 
@@ -320,7 +320,7 @@ def main():
 
     input_path = sys.argv[1]
     if not os.path.isfile(input_path):
-        print(f"Blad: Plik '{input_path}' nie istnieje.")
+        print(f"Error: File '{input_path}' not found.")
         sys.exit(1)
 
     if len(sys.argv) >= 3:
