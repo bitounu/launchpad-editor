@@ -347,12 +347,25 @@ def is_launchpad_port(port: MidiPort) -> bool:
     return "launchpad" in name or ("novation" in name and "lp" in name)
 
 
+def is_launchpad_daw_port(port: MidiPort) -> bool:
+    """Check if a port is the Launchpad DAW port (not MIDI)."""
+    return is_launchpad_port(port) and bool(re.search(r"\bda\b|\bdaw\b", port.name.lower()))
+
+
 def auto_detect_port() -> str:
+    """Return the ALSA port of the Launchpad MIDI output.
+
+    Prefers the MIDI port (MI/MIDI) over the DAW port (DA) when both
+    are present, as the MIDI port is used for LED control and SysEx.
+    """
     ports = [port for port in list_midi_ports() if supports_output(port)]
     launchpads = [port for port in ports if is_launchpad_port(port)]
     if len(launchpads) == 1:
         return launchpads[0].port
     if len(launchpads) > 1:
+        midi_ports = [port for port in launchpads if not is_launchpad_daw_port(port)]
+        if len(midi_ports) == 1:
+            return midi_ports[0].port
         candidates = ", ".join(f"{port.port} ({port.name})" for port in launchpads)
         raise ValueError(f"Multiple Launchpad ports detected: {candidates}")
     if not ports:

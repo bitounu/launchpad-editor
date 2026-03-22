@@ -391,13 +391,26 @@ def is_launchpad_port(name: str) -> bool:
     return "launchpad" in low or ("novation" in low and "lp" in low)
 
 
+def is_launchpad_daw_port(name: str) -> bool:
+    """Check if a port is the Launchpad DAW port (not MIDI)."""
+    import re
+    return is_launchpad_port(name) and bool(re.search(r"\bda\b|\bdaw\b", name.lower()))
+
+
 def auto_detect_port_name() -> str:
-    """Return the name of the first Launchpad MIDI output port found."""
+    """Return the name of the Launchpad MIDI output port.
+
+    Prefers the MIDI port (MI/MIDI) over the DAW port (DA) when both
+    are present, as the MIDI port is used for LED control and SysEx.
+    """
     outputs = mido.get_output_names()
     launchpads = [n for n in outputs if is_launchpad_port(n)]
     if len(launchpads) == 1:
         return launchpads[0]
     if len(launchpads) > 1:
+        midi_ports = [n for n in launchpads if not is_launchpad_daw_port(n)]
+        if len(midi_ports) == 1:
+            return midi_ports[0]
         candidates = ", ".join(launchpads)
         raise ValueError(f"Multiple Launchpad ports detected: {candidates}")
     if not outputs:
